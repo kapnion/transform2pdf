@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const SaxonJS = require('saxon-js');
 const { JSDOM } = require('jsdom');
-const translations = require('./config/translation.json'); // New translation file
+const translations = require('./config/translation.json'); // Ensure translation file is required correctly
 const htmlPdf = require('html-pdf');
 const multer = require('multer'); // Ensure multer is required correctly
 const { DOMParser } = require('xmldom'); // Import DOMParser
@@ -180,7 +180,7 @@ async function transformAndDisplay(sourceFileName, content, stylesheetFileName, 
     }, "async");
 
     let xrXML = output.principalResult;
-    let translationData = { ...translations['en'] }; // Ensure translationData is a map
+    let translationData = { ...translations['de'] }; // Ensure translationData is a map
 
     if (isOrder) {
       translationData["bt1"] = translationData["bt1_order"];
@@ -199,12 +199,26 @@ async function transformAndDisplay(sourceFileName, content, stylesheetFileName, 
       stylesheetParams: {
         "isOrder": isOrder,
         "showIds": false, // Assuming false for simplicity
-        "Q{}i18n": translationData
+        "Q{}i18n": translationData // Pass translation data correctly
       }
     }, "async");
 
     let HTML = response.principalResult;
-    res.send({ HTML });
+
+    // Convert HTML to PDF
+    const pdfFileName = path.basename(sourceFileName, path.extname(sourceFileName)) + '.pdf';
+    htmlPdf.create(HTML).toFile(pdfFileName, (err, result) => {
+      if (err) {
+        res.status(500).send({ error: "Exception", message: err.message });
+      } else {
+        res.download(result.filename, pdfFileName, (err) => {
+          if (err) {
+            res.status(500).send({ error: "Exception", message: err.message });
+          }
+          fs.unlinkSync(result.filename); // Clean up the generated PDF file
+        });
+      }
+    });
   } catch (error) {
     const errMessage = error?.message ? error.message : error;
     res.status(500).send({ error: "Exception", message: errMessage });

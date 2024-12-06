@@ -10,11 +10,23 @@ const { DOMParser } = require('xmldom'); // Import DOMParser
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const cors = require('cors'); // Import cors
+const phantomjs = require('phantomjs-prebuilt');
+const phantomPath = phantomjs.path;
+
+const options = {
+    phantomPath: phantomPath
+};
 
 const app = express();
-const port = 3000;
+const port = 8025;
 
-app.use(cors()); // Enable CORS
+const corsOptions = {
+  origin: '*', // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed methods
+  allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+  credentials: true // Allow credentials
+};
+app.use(cors(corsOptions)); // Enable CORS
 
 // Remove i18next initialization
 // i18next.use(Backend).init(i18nextOptions);
@@ -32,7 +44,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
+        url: 'http://localhost:8025', // Update to match the correct port
       },
     ],
   },
@@ -207,7 +219,7 @@ async function transformAndDisplay(sourceFileName, content, stylesheetFileName, 
 
     // Convert HTML to PDF
     const pdfFileName = path.basename(sourceFileName, path.extname(sourceFileName)) + '.pdf';
-    htmlPdf.create(HTML).toFile(pdfFileName, (err, result) => {
+    htmlPdf.create(HTML, options).toFile(pdfFileName, (err, result) => {
       if (err) {
         res.status(500).send({ error: "Exception", message: err.message });
       } else {
@@ -225,6 +237,6 @@ async function transformAndDisplay(sourceFileName, content, stylesheetFileName, 
   }
 }
 
-app.listen(port, () => {
+app.listen(port,'0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${port}`);
 });

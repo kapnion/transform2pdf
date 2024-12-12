@@ -4,21 +4,16 @@ const path = require('path');
 const SaxonJS = require('saxon-js');
 const { JSDOM } = require('jsdom');
 const translations = require('./config/translation.json'); // Ensure translation file is required correctly
-const htmlPdf = require('html-pdf');
 const multer = require('multer'); // Ensure multer is required correctly
 const { DOMParser } = require('xmldom'); // Import DOMParser
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const cors = require('cors'); // Import cors
-const phantomjs = require('phantomjs-prebuilt');
-const phantomPath = phantomjs.path;
+const puppeteer = require('puppeteer'); // Import puppeteer
 
-const options = {
-    phantomPath: phantomPath
-};
 
 const app = express();
-const port = 8025;
+const port = process.env.PORT || 8080; // Update port configuration
 
 const corsOptions = {
   origin: '*', // Allow all origins
@@ -32,7 +27,9 @@ app.use(cors(corsOptions)); // Enable CORS
 // i18next.use(Backend).init(i18nextOptions);
 
 app.use(express.json());
-const upload = multer({ dest: 'uploads/' });
+const uploadDir = '/tmp';
+
+const upload = multer({ dest: uploadDir});
 
 const swaggerOptions = {
   swaggerDefinition: {
@@ -44,8 +41,11 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:8025', // Update to match the correct port
+        url: 'https://convert-pdf-dot-single-cab-444122-f7.uc.r.appspot.com/', // Update to match the correct port
       },
+      {
+        url: 'http://localhost:8081', // Update to match the correct port
+      }
     ],
   },
   apis: [__filename],
@@ -59,7 +59,7 @@ app.post('/upload', upload.single('file'), async (req, res) => {
    * @swagger
    * /upload:
    *   post:
-   *     summary: Upload an XML file and transform it to HTML
+   *     summary: Upload an XML file and transform it to PDF
    *     consumes:
    *       - multipart/form-data
    *     requestBody:
@@ -72,17 +72,16 @@ app.post('/upload', upload.single('file'), async (req, res) => {
    *                 type: string
    *                 format: binary
    *                 description: The XML file to upload
+   *                 required: true // Ensure the file field is required
    *     responses:
    *       200:
-   *         description: Successfully transformed the XML file to HTML
+   *         description: Successfully transformed the XML file to PDF
    *         content:
-   *           application/json:
+   *           application/pdf:
    *             schema:
-   *               type: object
-   *               properties:
-   *                 HTML:
-   *                   type: string
-   *                   description: The transformed HTML content
+   *               type: string
+   *               format: binary
+   *               description: The transformed PDF content
    *       400:
    *         description: File format not recognized
    *         content:
@@ -217,26 +216,27 @@ async function transformAndDisplay(sourceFileName, content, stylesheetFileName, 
 
     let HTML = response.principalResult;
 
-    // Convert HTML to PDF
-    const pdfFileName = path.basename(sourceFileName, path.extname(sourceFileName)) + '.pdf';
-    htmlPdf.create(HTML, options).toFile(pdfFileName, (err, result) => {
+    // Convert HTML to PDF using puppeteer
+    const browser = await puppeteer.launch({headless: 'shell'});
+    const page = await browser.newPage();
+    await page.setContent(HTML);
+    const pdfFilePath = path.join(uploadDir, `${path.basename(sourceFileName, path.extname(sourceFileName))}.pdf`);
+    await page.pdf({ path: pdfFilePath, format: 'A4' });
+    await browser.close();
+
+    res.download(pdfFilePath, (err) => {
       if (err) {
         res.status(500).send({ error: "Exception", message: err.message });
-      } else {
-        res.download(result.filename, pdfFileName, (err) => {
-          if (err) {
-            res.status(500).send({ error: "Exception", message: err.message });
-          }
-          fs.unlinkSync(result.filename); // Clean up the generated PDF file
-        });
       }
+      fs.unlinkSync(pdfFilePath); // Clean up the generated PDF file
     });
+
   } catch (error) {
     const errMessage = error?.message ? error.message : error;
     res.status(500).send({ error: "Exception", message: errMessage });
   }
 }
 
-app.listen(port,'0.0.0.0', () => {
+app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
